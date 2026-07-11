@@ -1,3 +1,5 @@
+![Arquitectura del agente](images/uni.png)
+
 # Automatización inteligente de extracción de facturas
 
 ## Descripción del problema
