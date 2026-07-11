@@ -1,0 +1,21 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+
+# Cache de modelos (PaddleOCR/PaddleX) e imágenes generadas
+.cache/
+
+# Secretos
+.env
+
+# Checkpoints de Jupyter
+.ipynb_checkpoints/
+
+
