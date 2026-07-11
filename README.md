@@ -26,6 +26,8 @@ PaddleOCR + LLM local + Qwen2.5-VL como fallback
 + reglas de validación en Python + revisión humana
 ```
 
+
+
 ## Prueba de concepto
 
 El repositorio incluye un notebook con pruebas de concepto orientadas a comparar diferentes métodos de extracción documental.
@@ -52,3 +54,12 @@ También se ha trabajado en la contenerización de los componentes mediante **Do
 El objetivo principal es establecer una arquitectura escalable y confiable para procesar facturas internacionales de múltiples formatos, reduciendo la carga manual y aumentando la velocidad, consistencia y trazabilidad de la extracción de información.
 
 Este repositorio representa una etapa inicial de investigación y validación técnica antes de la implementación de una solución completa en producción.
+
+## Arquitectura del pipeline
+
+El siguiente diagrama muestra el flujo general del procesamiento de facturas:
+
+![Arquitectura del agente](images/workflow.png)
+
+
+
