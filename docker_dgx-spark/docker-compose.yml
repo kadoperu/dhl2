@@ -1,0 +1,87 @@
+# docker-compose.yml — Qwen2.5-VL-32B-Instruct-AWQ en NVIDIA DGX Spark (GB10, ARM64, sm_121)
+#
+# Servicios:
+#   vllm      -> backend de inferencia (OpenAI-compatible API en el puerto 8000, solo red interna)
+#   vl-proxy  -> proxy FastAPI, único puerto expuesto al host: 8499
+#
+# Requisitos previos en el host (DGX Spark / DGX OS):
+#   - Docker + NVIDIA Container Toolkit ya vienen preinstalados de fábrica.
+#   - Verifica con: docker info | grep -i nvidia
+
+services:
+  vllm:
+    # Imagen comunitaria precompilada para ARM64 + CUDA 13 + Blackwell sm_121 (GB10).
+    # Las imágenes oficiales de vLLM (x86/CUDA 12.x) NO funcionan en el Spark sin parches.
+    # Alternativa: sustituye por la imagen oficial de NVIDIA para Spark cuando la tengas
+    # (build.nvidia.com/spark/vllm) o por tu propia build con eugr/spark-vllm-docker.
+    image: hellohal2064/vllm-dgx-spark-gb10:latest
+    container_name: qwen25vl-vllm
+    restart: unless-stopped
+    shm_size: "8g"
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+      - HF_HOME=/models/hf-cache
+      # Si el modelo requiere autenticación en HF (normalmente no, es público):
+      # - HF_TOKEN=${HF_TOKEN:-}
+    volumes:
+      - hf-cache:/models/hf-cache
+    # IMPORTANTE: esta imagen trae su propio script de arranque (piensa en modelos
+    # locales montados en /models/ vía MODEL_PATH y agrega flags propios de Qwen3
+    # reasoning/tool-calling). Lo saltamos con "entrypoint" para invocar vllm serve
+    # directo y dejar que descargue el modelo de Hugging Face al volumen hf-cache.
+    entrypoint: ["vllm", "serve"]
+    command:
+      - "Qwen/Qwen2.5-VL-32B-Instruct-AWQ"
+      - "--host=0.0.0.0"
+      - "--port=8000"
+      - "--quantization=awq_marlin"
+      - "--max-model-len=32768"
+      - "--gpu-memory-utilization=0.90"
+      - "--max-num-seqs=4"
+      - '--limit-mm-per-prompt={"image": 4}'
+    # Nota sm_121: si "awq_marlin" falla, cambia a "--quantization=awq" a secas,
+    # y si hay errores de kernels/CUDA graphs agrega "--enforce-eager" a la lista
+    # (baja ~20-30% el throughput pero es la vía segura mientras maduran los kernels).
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+      start_period: 480s   # la primera carga del 32B puede tardar varios minutos
+    networks:
+      - vlnet
+    # No publicamos el 8000 al host: solo el proxy es visible desde fuera.
+
+  vl-proxy:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: qwen25vl-proxy
+    restart: unless-stopped
+    depends_on:
+      vllm:
+        condition: service_healthy
+    environment:
+      - VLLM_BASE_URL=http://vllm:8000
+      - MODEL_NAME=Qwen/Qwen2.5-VL-32B-Instruct-AWQ
+      - PROXY_PORT=8499
+      - REQUEST_TIMEOUT=300
+    ports:
+      - "8499:8499"
+    networks:
+      - vlnet
+
+networks:
+  vlnet:
+    driver: bridge
+
+volumes:
+  hf-cache:
